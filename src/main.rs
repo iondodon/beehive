@@ -4,14 +4,16 @@ use tokio::spawn;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+
     let listener = TcpListener::bind("127.0.0.1:7878").await?;
 
-    println!("Server running on localhost:7878");
+    log::info!("Server running on localhost:7878");
 
     loop {
         let (mut socket, addr) = listener.accept().await?;
 
-        println!("Accepted connection from {}", addr);
+        log::info!("Accepted connection from {}", addr);
 
         spawn(async move {
             let mut buf = [0; 1024];
@@ -21,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(n) if n == 0 => return,
                     Ok(n) => n,
                     Err(e) => {
-                        eprintln!("Failed to read from socket; err = {:?}", e);
+                        log::error!("Failed to read from socket; err = {:?}", e);
                         return;
                     }
                 };
@@ -29,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 handle_command(&buf[..n]);
                 
                 if let Err(e) = socket.write_all(&buf[..n]).await {
-                    eprintln!("Failed to write to socket; err = {:?}", e);
+                    log::error!("Failed to write to socket; err = {:?}", e);
                     return;
                 }
             }
@@ -46,14 +48,14 @@ fn handle_command(command: &[u8]) {
         if parts.len() == 3 {
             match parts.as_slice() {
                 ["SET", key, value] => {
-                    println!("Command: SET, Key: {}, Value: {}", key, value);
+                    log::info!("Command: SET, Key: {}, Value: {}", key, value);
                 },
-                _ => println!("Unknown command or incorrect format"),
+                _ => log::error!("Unknown command or incorrect format"),
             }
         } else {
-            println!("Incorrect format");
+            log::error!("Incorrect format");
         }
     } else {
-        println!("Data is not valid UTF-8");
+        log::error!("Data is not valid UTF-8");
     }
 }
