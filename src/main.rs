@@ -42,18 +42,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn handle_command(command: &[u8]) {
     if let Ok(data) = std::str::from_utf8(command) {
         let data = data.trim_matches(char::from(0)).trim();
-        
         let parts: Vec<&str> = data.split_whitespace().collect();
         
-        if parts.len() == 3 {
-            match parts.as_slice() {
+        match parts.len() {
+            3 => match parts.as_slice() {
                 ["SET", key, value] => {
                     log::info!("Command: SET, Key: {}, Value: {}", key, value);
                 },
                 _ => log::error!("Unknown command or incorrect format"),
+            },
+            _ => { 
+                log::error!("Incorrect format"); 
             }
-        } else {
-            log::error!("Incorrect format");
         }
     } else {
         log::error!("Data is not valid UTF-8");
