@@ -1,8 +1,4 @@
-use std::any::Any;
-use std::borrow::{Borrow, BorrowMut};
-use std::collections::HashMap;
-use std::fmt::Error;
-use std::sync::{LockResult, PoisonError, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{PoisonError, RwLockWriteGuard};
 
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -58,14 +54,17 @@ fn handle_command(command: &[u8])  {
         match parts.len() {
             3 => match parts.as_slice() {
                 ["SET", key, value] => {
-                    set(*key, *value).unwrap()
-                },
-                ["GET", key] => {
-                    let val = get(*key);
-                    log::debug!("{:?}", val)
-                },
+                    set(*key, *value).unwrap();
+                }
                 _ => log::error!("Unknown command or incorrect format"),
             },
+            2 => match parts.as_slice() {
+                ["GET", key] => {
+                    let _val = get(*key);
+                    
+                },
+                _ => log::error!("Unknown command or incorrect format"),
+            }
             _ => { 
                 log::error!("Incorrect format"); 
             }
@@ -99,5 +98,8 @@ fn get(key: &str) -> Option<Value>{
     let state_lock = state_lock.unwrap();
     let state_map = &state_lock.state_map;
 
-    state_map.get(&key).cloned()
+    let a = state_map.get(&key);
+    let b = a.expect("adasdsads");
+
+    Some(b.clone())
 }

@@ -2,8 +2,13 @@ use std::collections::HashMap;
 use std::any::Any;
 use std::sync::RwLock;
 use lazy_static::lazy_static;
+use std::fmt::Debug;
 
-pub type Value = Box<dyn Any + Send + Sync>;
+pub trait CloneableAny: Any + Send + Sync {
+    fn clone_any(&self) -> impl CloneableAny;
+}
+
+pub type Value = Box<dyn CloneableAny>;
 
 pub struct State {
     pub state_map: HashMap<String, Value>
