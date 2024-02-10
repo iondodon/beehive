@@ -1,6 +1,17 @@
+use std::any::Any;
+use std::borrow::{Borrow, BorrowMut};
+use std::collections::HashMap;
+use std::fmt::Error;
+use std::sync::{LockResult, PoisonError, RwLockReadGuard, RwLockWriteGuard};
+
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::spawn;
+
+mod state;
+
+use state::{State, Value, STATE};
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn handle_command(command: &[u8]) {
+fn handle_command(command: &[u8])  {
     if let Ok(data) = std::str::from_utf8(command) {
         let data = data.trim_matches(char::from(0)).trim();
         let parts: Vec<&str> = data.split_whitespace().collect();
@@ -47,7 +58,11 @@ fn handle_command(command: &[u8]) {
         match parts.len() {
             3 => match parts.as_slice() {
                 ["SET", key, value] => {
-                    log::info!("Command: SET, Key: {}, Value: {}", key, value);
+                    set(*key, *value).unwrap()
+                },
+                ["GET", key] => {
+                    let val = get(*key);
+                    log::debug!("{:?}", val)
                 },
                 _ => log::error!("Unknown command or incorrect format"),
             },
@@ -58,4 +73,31 @@ fn handle_command(command: &[u8]) {
     } else {
         log::error!("Data is not valid UTF-8");
     }
+}
+
+
+fn set(key: &str, value: &str) -> Result<(), PoisonError<RwLockWriteGuard<'static, State>>> {
+    let (key, value) = (key.to_string(), value.to_string());
+
+    let mut state_lock = STATE.write()?;
+
+    let state_map = &mut state_lock.state_map;
+
+    state_map.insert(key, Box::new(value));
+    Ok(())
+}
+
+fn get(key: &str) -> Option<Value>{
+    let key = key.to_string();
+
+    let state_lock = STATE.read();
+
+    if state_lock.is_err() {
+        return None;
+    }
+
+    let state_lock = state_lock.unwrap();
+    let state_map = &state_lock.state_map;
+
+    state_map.get(&key).cloned()
 }
