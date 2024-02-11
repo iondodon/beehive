@@ -1,5 +1,4 @@
-use std::borrow::Borrow;
-use std::sync::{PoisonError, RwLockWriteGuard};
+use std::sync::{Arc, PoisonError, RwLockWriteGuard};
 
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -87,11 +86,11 @@ fn set(key: &str, value: &str) -> Result<(), PoisonError<RwLockWriteGuard<'stati
 
     let store = &mut state_lock.store;
 
-    store.insert(key, Box::new(value));
+    store.insert(key, Arc::new(value));
     Ok(())
 }
 
-fn get(key: &str) -> Option<Box<dyn Value>> {
+fn get(key: &str) -> Option<Arc<dyn Value>> {
     log::info!("GET {}", key);
 
     let key = key.to_string();
@@ -102,7 +101,7 @@ fn get(key: &str) -> Option<Box<dyn Value>> {
     };
 
     return match lock.store.get(&key) {
-        Some(val) => Some(val.clone_value()),
+        Some(val) => Some(val.clone()),
         None => None
     };
 }
