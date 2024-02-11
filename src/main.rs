@@ -37,15 +37,15 @@ async fn accept_cmd_connections(cmd_listener: TcpListener) {
 
 #[derive(Debug)]
 enum CmdResponseStatus {
-    Success,
+    Success(Arc<dyn Value>),
     Failure
 }
 
 impl Display for CmdResponseStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
-            CmdResponseStatus::Success => "Success\n",
-            CmdResponseStatus::Failure => "Failure\n",
+            CmdResponseStatus::Success(v) => format!("Success({})\n", v),
+            CmdResponseStatus::Failure => format!("Failure\n"),
         })
     }
 }
@@ -83,14 +83,14 @@ fn handle_command(command: &[u8]) -> CmdResponseStatus {
         match parts.as_slice() {
             ["SET", key, value] => {
                 match set(*key, *value) {
-                    Ok(_) => CmdResponseStatus::Success,
+                    Ok(_) => CmdResponseStatus::Success(Arc::new(())),
                     Err(_) => CmdResponseStatus::Failure,
                 }
             },
             ["GET", key] => {
                 match get(*key) {
-                    Ok(Some(_)) => CmdResponseStatus::Success,
-                    Ok(None) => CmdResponseStatus::Success,
+                    Ok(Some(v)) => CmdResponseStatus::Success(v.clone()),
+                    Ok(None) => CmdResponseStatus::Success(Arc::new(())),
                     Err(_) => CmdResponseStatus::Failure
                 }
             },
