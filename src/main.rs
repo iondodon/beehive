@@ -1,4 +1,4 @@
-use std::sync::{Arc, PoisonError, RwLockWriteGuard};
+use std::sync::{Arc, PoisonError, RwLockReadGuard, RwLockWriteGuard};
 
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
@@ -40,7 +40,10 @@ async fn listen_for_commands(mut socket: TcpStream) {
 
     loop {
         let n = match socket.read(&mut buf).await {
-            Ok(n) if n == 0 => return,
+            Ok(n) if n == 0 => {
+                log::warn!("Empty payload. Probably client forcefully closed the connection.");
+                return;
+            },
             Ok(n) => n,
             Err(e) => {
                 log::error!("Failed to read from socket; err = {:?}", e);
@@ -48,7 +51,7 @@ async fn listen_for_commands(mut socket: TcpStream) {
             }
         };
 
-        handle_command(&buf[..n]);
+        let _ = handle_command(&buf[..n]);
         
         if let Err(e) = socket.write_all(&buf[..n]).await {
             log::error!("Failed to write to socket; err = {:?}", e);
@@ -57,7 +60,7 @@ async fn listen_for_commands(mut socket: TcpStream) {
     }
 }
 
-fn handle_command(command: &[u8])  {
+fn handle_command(command: &[u8]) {
     if let Ok(data) = std::str::from_utf8(command) {
         let data = data.trim_matches(char::from(0)).trim();
         let parts: Vec<&str> = data.split_whitespace().collect();
@@ -72,8 +75,9 @@ fn handle_command(command: &[u8])  {
             2 => match parts.as_slice() {
                 ["GET", key] => {
                     match get(*key) {
-                        Some(val) => log::debug!("{}", val),
-                        None => log::debug!("Not found")
+                        Ok(Some(val)) => log::debug!("{}", val),
+                        Ok(None) => log::debug!("Not found"),
+                        Err(e) => log::debug!("{}", e)
                     };
                 },
                 _ => log::error!("Unknown command or incorrect format"),
@@ -86,7 +90,6 @@ fn handle_command(command: &[u8])  {
         log::error!("Data is not valid UTF-8");
     }
 }
-
 
 fn set(key: &str, value: &str) -> Result<(), PoisonError<RwLockWriteGuard<'static, State>>> {
     log::info!("SET {} to {}", key, value);
@@ -101,18 +104,15 @@ fn set(key: &str, value: &str) -> Result<(), PoisonError<RwLockWriteGuard<'stati
     Ok(())
 }
 
-fn get(key: &str) -> Option<Arc<dyn Value>> {
+fn get(key: &str) -> Result<Option<Arc<dyn Value>>, PoisonError<RwLockReadGuard<'static, State>>> {
     log::info!("GET {}", key);
 
     let key = key.to_string();
      
-    let lock = match STATE.read() {
-        Ok(lock) => lock,
-        Err(_) => return None
-    };
+    let lock = STATE.read()?;
 
     return match lock.store.get(&key) {
-        Some(val) => Some(val.clone()),
-        None => None
+        Some(val) => Ok(Some(val.clone())),
+        None => Ok(None)
     };
 }
