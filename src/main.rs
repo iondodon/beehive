@@ -1,8 +1,6 @@
 use std::sync::{Arc, PoisonError, RwLockWriteGuard};
 
-use tokio::net::TcpListener;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::spawn;
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
 mod state;
 
@@ -13,36 +11,49 @@ use state::{State, Value, STATE};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let listener = TcpListener::bind("127.0.0.1:7878").await?;
+    let cmd_listener = TcpListener::bind("127.0.0.1:7777").await?;
+    tokio::spawn(async move { accept_cmd_connections(cmd_listener).await }).await?;
 
-    log::info!("Server running on localhost:7878");
+    Ok(())
+}
+
+async fn accept_cmd_connections(cmd_listener: TcpListener) {
+    log::info!("Listening commands on port 7777");
 
     loop {
-        let (mut socket, addr) = listener.accept().await?;
+        let (socket, addr) = match cmd_listener.accept().await {
+            Ok((socket, addr)) => (socket, addr),
+            Err(_) => {
+                log::error!("Failed to accept command connection");
+                continue;
+            }
+        };
 
         log::info!("Accepted connection from {}", addr);
 
-        spawn(async move {
-            let mut buf = [0; 1024];
+        tokio::spawn(async move { listen_for_commands(socket).await });
+    }
+}
 
-            loop {
-                let n = match socket.read(&mut buf).await {
-                    Ok(n) if n == 0 => return,
-                    Ok(n) => n,
-                    Err(e) => {
-                        log::error!("Failed to read from socket; err = {:?}", e);
-                        return;
-                    }
-                };
+async fn listen_for_commands(mut socket: TcpStream) {
+    let mut buf = [0; 1024];
 
-                handle_command(&buf[..n]);
-                
-                if let Err(e) = socket.write_all(&buf[..n]).await {
-                    log::error!("Failed to write to socket; err = {:?}", e);
-                    return;
-                }
+    loop {
+        let n = match socket.read(&mut buf).await {
+            Ok(n) if n == 0 => return,
+            Ok(n) => n,
+            Err(e) => {
+                log::error!("Failed to read from socket; err = {:?}", e);
+                return;
             }
-        });
+        };
+
+        handle_command(&buf[..n]);
+        
+        if let Err(e) = socket.write_all(&buf[..n]).await {
+            log::error!("Failed to write to socket; err = {:?}", e);
+            return;
+        }
     }
 }
 

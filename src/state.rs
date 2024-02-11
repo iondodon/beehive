@@ -4,16 +4,9 @@ use std::sync::{Arc, RwLock};
 use lazy_static::lazy_static;
 
 
-pub trait Value: Send + Sync + Debug {
+pub trait Value: Send + Sync + Debug { }
 
-}
-
-impl<T> Value for T 
-where
-    T: 'static + Send + Sync + Debug
-{
-    
-}
+impl<T> Value for T where T: 'static + Send + Sync + Debug {}
 
 impl Display for dyn Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -26,5 +19,7 @@ pub struct State {
 }
 
 lazy_static!{
-    pub static ref STATE: RwLock<State> = RwLock::new(State { store: HashMap::new() });
+    pub static ref STATE: RwLock<State> = RwLock::new(State { 
+        store: HashMap::new() 
+    });
 }
