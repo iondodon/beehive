@@ -80,36 +80,24 @@ fn handle_command(command: &[u8]) -> CmdResponseStatus {
         let data = data.trim_matches(char::from(0)).trim();
         let parts: Vec<&str> = data.split_whitespace().collect();
         
-        match parts.len() {
-            3 => match parts.as_slice() {
-                ["SET", key, value] => {
-                    match set(*key, *value) {
-                        Ok(_) => CmdResponseStatus::Success,
-                        Err(_) => CmdResponseStatus::Failure,
-                    }
+        match parts.as_slice() {
+            ["SET", key, value] => {
+                match set(*key, *value) {
+                    Ok(_) => CmdResponseStatus::Success,
+                    Err(_) => CmdResponseStatus::Failure,
                 }
-                _ => {
-                    log::error!("Unknown command or incorrect format");
-                    CmdResponseStatus::Failure
-                },
             },
-            2 => match parts.as_slice() {
-                ["GET", key] => {
-                    match get(*key) {
-                        Ok(Some(_)) => CmdResponseStatus::Success,
-                        Ok(None) => CmdResponseStatus::Success,
-                        Err(_) => CmdResponseStatus::Failure
-                    }
-                },
-                _ => { 
-                    log::error!("Unknown command or incorrect format");
-                    CmdResponseStatus::Failure
-                },
-            }
+            ["GET", key] => {
+                match get(*key) {
+                    Ok(Some(_)) => CmdResponseStatus::Success,
+                    Ok(None) => CmdResponseStatus::Success,
+                    Err(_) => CmdResponseStatus::Failure
+                }
+            },
             _ => { 
                 log::error!("Incorrect format"); 
                 CmdResponseStatus::Failure
-            }
+            }  
         }
     } else {
         log::error!("Data is not valid UTF-8");
