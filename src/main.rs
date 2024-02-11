@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::sync::{PoisonError, RwLockWriteGuard};
 
 use tokio::net::TcpListener;
@@ -60,8 +61,10 @@ fn handle_command(command: &[u8])  {
             },
             2 => match parts.as_slice() {
                 ["GET", key] => {
-                    let _val = get(*key);
-                    
+                    match get(*key) {
+                        Some(val) => log::debug!("{}", val),
+                        None => log::debug!("Not found")
+                    };
                 },
                 _ => log::error!("Unknown command or incorrect format"),
             }
@@ -76,30 +79,30 @@ fn handle_command(command: &[u8])  {
 
 
 fn set(key: &str, value: &str) -> Result<(), PoisonError<RwLockWriteGuard<'static, State>>> {
+    log::info!("SET {} to {}", key, value);
+
     let (key, value) = (key.to_string(), value.to_string());
 
     let mut state_lock = STATE.write()?;
 
-    let state_map = &mut state_lock.state_map;
+    let store = &mut state_lock.store;
 
-    state_map.insert(key, Box::new(value));
+    store.insert(key, Box::new(value));
     Ok(())
 }
 
-fn get(key: &str) -> Option<Value>{
+fn get(key: &str) -> Option<Box<dyn Value>> {
+    log::info!("GET {}", key);
+
     let key = key.to_string();
+     
+    let lock = match STATE.read() {
+        Ok(lock) => lock,
+        Err(_) => return None
+    };
 
-    let state_lock = STATE.read();
-
-    if state_lock.is_err() {
-        return None;
-    }
-
-    let state_lock = state_lock.unwrap();
-    let state_map = &state_lock.state_map;
-
-    let a = state_map.get(&key);
-    let b = a.expect("adasdsads");
-
-    Some(b.clone())
+    return match lock.store.get(&key) {
+        Some(val) => Some(val.clone_value()),
+        None => None
+    };
 }
