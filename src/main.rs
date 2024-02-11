@@ -1,4 +1,4 @@
-use std::sync::{Arc, PoisonError, RwLockReadGuard, RwLockWriteGuard};
+use std::{fmt::Display, sync::{Arc, PoisonError, RwLockReadGuard, RwLockWriteGuard}};
 
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
@@ -35,6 +35,21 @@ async fn accept_cmd_connections(cmd_listener: TcpListener) {
     }
 }
 
+#[derive(Debug)]
+enum CmdResponseStatus {
+    Success,
+    Failure
+}
+
+impl Display for CmdResponseStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            CmdResponseStatus::Success => "Success\n",
+            CmdResponseStatus::Failure => "Failure\n",
+        })
+    }
+}
+
 async fn listen_for_commands(mut socket: TcpStream) {
     let mut buf = [0; 1024];
 
@@ -51,16 +66,16 @@ async fn listen_for_commands(mut socket: TcpStream) {
             }
         };
 
-        let _ = handle_command(&buf[..n]);
+        let status = handle_command(&buf[..n]);
         
-        if let Err(e) = socket.write_all(&buf[..n]).await {
-            log::error!("Failed to write to socket; err = {:?}", e);
+        if let Err(e) = socket.write_all(status.to_string().as_bytes()).await {
+            log::error!("Failed to responde to client; err = {:?}", e);
             return;
         }
     }
 }
 
-fn handle_command(command: &[u8]) {
+fn handle_command(command: &[u8]) -> CmdResponseStatus {
     if let Ok(data) = std::str::from_utf8(command) {
         let data = data.trim_matches(char::from(0)).trim();
         let parts: Vec<&str> = data.split_whitespace().collect();
@@ -68,26 +83,37 @@ fn handle_command(command: &[u8]) {
         match parts.len() {
             3 => match parts.as_slice() {
                 ["SET", key, value] => {
-                    set(*key, *value).unwrap();
+                    match set(*key, *value) {
+                        Ok(_) => CmdResponseStatus::Success,
+                        Err(_) => CmdResponseStatus::Failure,
+                    }
                 }
-                _ => log::error!("Unknown command or incorrect format"),
+                _ => {
+                    log::error!("Unknown command or incorrect format");
+                    CmdResponseStatus::Failure
+                },
             },
             2 => match parts.as_slice() {
                 ["GET", key] => {
                     match get(*key) {
-                        Ok(Some(val)) => log::debug!("{}", val),
-                        Ok(None) => log::debug!("Not found"),
-                        Err(e) => log::debug!("{}", e)
-                    };
+                        Ok(Some(_)) => CmdResponseStatus::Success,
+                        Ok(None) => CmdResponseStatus::Success,
+                        Err(_) => CmdResponseStatus::Failure
+                    }
                 },
-                _ => log::error!("Unknown command or incorrect format"),
+                _ => { 
+                    log::error!("Unknown command or incorrect format");
+                    CmdResponseStatus::Failure
+                },
             }
             _ => { 
                 log::error!("Incorrect format"); 
+                CmdResponseStatus::Failure
             }
         }
     } else {
         log::error!("Data is not valid UTF-8");
+        CmdResponseStatus::Failure
     }
 }
 
