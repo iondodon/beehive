@@ -1,6 +1,6 @@
 use std::{fmt::Display, sync::{Arc, PoisonError, RwLockReadGuard, RwLockWriteGuard}};
 
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}, try_join};
 
 mod state;
 
@@ -11,25 +11,46 @@ use state::{State, Value, STATE};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
+    let cc_listener = TcpListener::bind("127.0.0.1:6666").await?;
+    let cc_task = tokio::spawn(async move { accept_control_connections(cc_listener).await });
+
     let cmd_listener = TcpListener::bind("127.0.0.1:7777").await?;
-    tokio::spawn(async move { accept_cmd_connections(cmd_listener).await }).await?;
+    let acc_taks = tokio::spawn(async move { accept_cmd_connections(cmd_listener).await });
+
+    try_join!(cc_task, acc_taks)?;
 
     Ok(())
 }
 
-async fn accept_cmd_connections(cmd_listener: TcpListener) {
-    log::info!("Listening commands on port 7777");
+async fn accept_control_connections(cc_listener: TcpListener) {
+    log::info!("Listening control connections on port 6666");
 
     loop {
-        let (socket, addr) = match cmd_listener.accept().await {
-            Ok((socket, addr)) => (socket, addr),
-            Err(_) => {
-                log::error!("Failed to accept command connection");
+        let (_socket, addr) = match cc_listener.accept().await {
+            Ok((socket, addr) )=> (socket, addr),
+            Err(e) => {
+                log::error!("Failed to accept command connection {:?}", e);
                 continue;
             }
         };
 
-        log::info!("Accepted connection from {}", addr);
+        log::info!("Accepted control connection from {}", addr);
+    }
+}
+
+async fn accept_cmd_connections(cmd_listener: TcpListener) {
+    log::info!("Listening command connections on port 7777");
+
+    loop {
+        let (socket, addr) = match cmd_listener.accept().await {
+            Ok((socket, addr)) => (socket, addr),
+            Err(e) => {
+                log::error!("Failed to accept command connection {:?}", e);
+                continue;
+            }
+        };
+
+        log::info!("Accepted command connection from {}", addr);
 
         tokio::spawn(async move { listen_for_commands(socket).await });
     }
