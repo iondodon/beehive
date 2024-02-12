@@ -9,16 +9,16 @@ use crate::state::{State, Value, STATE};
 
 
 #[derive(Debug)]
-enum CmdResponseStatus {
+enum ClientCmdResponce {
     Success(Arc<dyn Value>),
     Failure
 }
 
-impl Display for CmdResponseStatus {
+impl Display for ClientCmdResponce {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
-            CmdResponseStatus::Success(v) => format!("Success({})\n", v),
-            CmdResponseStatus::Failure => format!("Failure\n"),
+            ClientCmdResponce::Success(v) => format!("Success({})\n", v),
+            ClientCmdResponce::Failure => format!("Failure\n"),
         })
     }
 }
@@ -48,33 +48,33 @@ pub async fn listen_for_commands(mut socket: TcpStream) {
     }
 }
 
-fn handle_command(command: &[u8]) -> CmdResponseStatus {
-    if let Ok(data) = std::str::from_utf8(command) {
-        let data = data.trim_matches(char::from(0)).trim();
-        let parts: Vec<&str> = data.split_whitespace().collect();
+fn handle_command(command: &[u8]) -> ClientCmdResponce {
+    if let Ok(cmd) = std::str::from_utf8(command) {
+        let cmd = cmd.trim_matches(char::from(0)).trim();
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
         
         match parts.as_slice() {
             ["SET", key, value] => {
                 match set(*key, *value) {
-                    Ok(_) => CmdResponseStatus::Success(Arc::new(())),
-                    Err(_) => CmdResponseStatus::Failure,
+                    Ok(_) => ClientCmdResponce::Success(Arc::new(())),
+                    Err(_) => ClientCmdResponce::Failure,
                 }
             },
             ["GET", key] => {
                 match get(*key) {
-                    Ok(Some(v)) => CmdResponseStatus::Success(v.clone()),
-                    Ok(None) => CmdResponseStatus::Success(Arc::new(())),
-                    Err(_) => CmdResponseStatus::Failure
+                    Ok(Some(v)) => ClientCmdResponce::Success(v.clone()),
+                    Ok(None) => ClientCmdResponce::Success(Arc::new(())),
+                    Err(_) => ClientCmdResponce::Failure
                 }
             },
             _ => { 
                 log::error!("Incorrect format"); 
-                CmdResponseStatus::Failure
+                ClientCmdResponce::Failure
             }  
         }
     } else {
         log::error!("Data is not valid UTF-8");
-        CmdResponseStatus::Failure
+        ClientCmdResponce::Failure
     }
 }
 
