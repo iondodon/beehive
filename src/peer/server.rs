@@ -1,7 +1,5 @@
 use tokio::net::TcpListener;
 
-mod command;
-
 pub async fn accept_peer_connections(cc_listener: TcpListener) {
     log::info!("Listening peer connections on port 6666");
 

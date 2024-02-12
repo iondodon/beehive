@@ -1,6 +1,6 @@
 use tokio::net::TcpListener;
 
-mod command;
+use super::command;
 
 pub async fn accept_client_connections(cmd_listener: TcpListener) {
     log::info!("Listening client connections on port 7777");
@@ -19,4 +19,3 @@ pub async fn accept_client_connections(cmd_listener: TcpListener) {
         tokio::spawn(async move { command::listen_for_commands(socket).await });
     }
 }
-
